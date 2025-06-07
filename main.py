@@ -179,9 +179,11 @@ class SignalEnrichmentProcessor:
                     "Spot USDT processing successful",
                     signal_id=signal.id,
                     symbol=signal.symbol,
-                    source=enriched.spot_source_usdt,
-                    avg_volume=enriched.spot_avg_volume_usdt,
-                    current_volume=enriched.spot_current_volume_usdt
+                    source=enriched.spot_volume_source_usdt,  # Исправлено
+                    avg_volume=enriched.spot_volume_usdt_average,  # Исправлено
+                    current_volume=enriched.spot_volume_usdt_current,  # Исправлено
+                    avg_price=enriched.spot_price_usdt_average,
+                    current_price=enriched.spot_price_usdt_current
                 )
             else:
                 log_with_context(
@@ -202,7 +204,10 @@ class SignalEnrichmentProcessor:
             )
 
         # Step 2.3: Process Spot BTC data
+        # TODO: Implement when SpotBTCProcessor is ready
+
         # Step 2.4: Process price statistics
+        # TODO: Implement when PriceStatsProcessor is ready
 
         return enriched
 
