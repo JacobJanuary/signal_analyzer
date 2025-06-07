@@ -6,6 +6,7 @@ from typing import Optional
 from database.models import signal_repository, SignalRecord, EnrichedSignalData
 from modules.oi_processor import OIProcessor
 from modules.spot_usdt_processor import SpotUSDTProcessor
+from modules.spot_btc_processor import SpotBTCProcessor
 from utils.logger import setup_logger, log_with_context
 from config.settings import settings
 
@@ -20,6 +21,7 @@ class SignalEnrichmentProcessor:
         """Initialize the processor."""
         self.oi_processor = OIProcessor()
         self.spot_usdt_processor = SpotUSDTProcessor()
+        self.spot_btc_processor = SpotBTCProcessor()
         # Future: Initialize other processors here
         # self.spot_btc_processor = SpotBTCProcessor()
         # self.price_stats_processor = PriceStatsProcessor()
@@ -204,7 +206,43 @@ class SignalEnrichmentProcessor:
             )
 
         # Step 2.3: Process Spot BTC data
-        # TODO: Implement when SpotBTCProcessor is ready
+        # Step 2.3: Process Spot BTC data
+        try:
+            spot_btc_result = self.spot_btc_processor.process_symbol(signal.symbol)
+            if not spot_btc_result.error:
+                enriched.spot_volume_btc_average = spot_btc_result.avg_volume_btc
+                enriched.spot_volume_btc_current = spot_btc_result.current_volume_btc
+                enriched.spot_volume_btc_yesterday = spot_btc_result.yesterday_volume_btc
+                enriched.spot_volume_btc_change_current_to_yesterday = spot_btc_result.volume_change_current_to_yesterday
+                enriched.spot_volume_btc_change_current_to_average = spot_btc_result.volume_change_current_to_average
+                enriched.spot_volume_source_btc = spot_btc_result.source_exchange.value if spot_btc_result.source_exchange else None
+
+                log_with_context(
+                    logger, 'info',
+                    "Spot BTC processing successful",
+                    signal_id=signal.id,
+                    symbol=signal.symbol,
+                    source=enriched.spot_volume_source_btc,
+                    avg_volume_btc=enriched.spot_volume_btc_average,
+                    current_volume_btc=enriched.spot_volume_btc_current
+                )
+            else:
+                log_with_context(
+                    logger, 'warning',
+                    "Spot BTC processing failed",
+                    signal_id=signal.id,
+                    symbol=signal.symbol,
+                    error=spot_btc_result.error
+                )
+        except Exception as e:
+            log_with_context(
+                logger, 'error',
+                "Exception in Spot BTC processing",
+                signal_id=signal.id,
+                symbol=signal.symbol,
+                error=str(e),
+                exc_info=True
+            )
 
         # Step 2.4: Process price statistics
         # TODO: Implement when PriceStatsProcessor is ready

@@ -352,7 +352,7 @@ class SpotUSDTProcessor:
                     # Bybit kline: [timestamp, open, high, low, close, volume, turnover]
                     if len(kline) >= 7:
                         turnover_usdt = safe_float_conversion(kline[6])  # Turnover in USDT
-                        close_price = safe_float_conversion(kline[4])    # Close price
+                        close_price = safe_float_conversion(kline[4])  # Close price
 
                         if turnover_usdt > 0:
                             volumes_usdt.append(turnover_usdt)
@@ -376,26 +376,61 @@ class SpotUSDTProcessor:
             avg_data_volumes = volumes_usdt[:-1] if len(volumes_usdt) > 30 else volumes_usdt
             avg_data_prices = prices[:-1] if len(prices) > 30 else prices
 
+            # Handle case with insufficient data for averages
+            if not avg_data_volumes or not avg_data_prices:
+                return SpotUSDTResult(error="Not enough historical data from Bybit to calculate averages")
+
             avg_volume = sum(avg_data_volumes) / len(avg_data_volumes)
             avg_price = sum(avg_data_prices) / len(avg_data_prices)
 
-            # Get current data
-            current_volume = volumes_usdt[-1] if volumes_usdt else 0
+            # Get current price (last known closing price)
             current_price = prices[-1] if prices else 0
 
             # Get yesterday's data
             yesterday_volume = volumes_usdt[-2] if len(volumes_usdt) >= 2 else avg_volume
             yesterday_price = prices[-2] if len(prices) >= 2 else avg_price
 
+            # Get current volume from the last available kline
+            # Bybit's daily (D) kline volume is for the last 24h period
+            current_volume = volumes_usdt[-1] if volumes_usdt else 0
+
+            # ---> НАЧАЛО ИЗМЕНЕНИЙ <---
+
+            price_change_1h = None
+            try:
+                # Bybit API uses '60' for 1-hour interval
+                klines_1h = self.bybit_client.get_spot_klines(
+                    trading_symbol, "60",
+                    start_time=get_timestamp_ms(utc_now - timedelta(hours=2)),  # request 2 hours to be safe
+                    end_time=get_timestamp_ms(utc_now),
+                    limit=2
+                )
+                if klines_1h and len(klines_1h) > 0:
+                    # Price from ~1 hour ago (open price of the previous candle)
+                    price_1h_ago = safe_float_conversion(klines_1h[0][1])
+                    if price_1h_ago > 0:
+                        price_change_1h = calculate_percentage_change(current_price, price_1h_ago)
+            except Exception as e:
+                log_with_context(logger, 'warning', "Could not calculate 1h price change for Bybit",
+                                 symbol=trading_symbol, error=str(e))
+
+            price_change_7d = None
+            try:
+                if len(prices) >= 8:  # Need at least 8 days of data (current + 7 days ago)
+                    price_7d_ago = prices[-8]
+                    price_change_7d = calculate_percentage_change(current_price, price_7d_ago)
+            except Exception as e:
+                log_with_context(logger, 'warning', "Could not calculate 7d price change for Bybit",
+                                 symbol=trading_symbol, error=str(e))
+
+            # ---> КОНЕЦ ИЗМЕНЕНИЙ <---
+
             # Calculate volume percentage changes
             volume_change_to_avg = calculate_percentage_change(current_volume, avg_volume)
             volume_change_to_yesterday = calculate_percentage_change(current_volume, yesterday_volume)
 
             # Calculate price percentage changes
-            price_change_to_avg = calculate_percentage_change(current_price, avg_price)
-
-            # For Bybit, we need to get price changes separately
-            # 24h change can be calculated from yesterday's price
+            price_change_30d = calculate_percentage_change(current_price, avg_price)
             price_change_24h = calculate_percentage_change(current_price, yesterday_price)
 
             log_with_context(
@@ -418,10 +453,10 @@ class SpotUSDTProcessor:
                 avg_price_usdt=avg_price,
                 current_price_usdt=current_price,
                 yesterday_price_usdt=yesterday_price,
-                price_change_1h=None,  # Would need hourly data
+                price_change_1h=price_change_1h,
                 price_change_24h=price_change_24h,
-                price_change_7d=None,  # Would need to calculate
-                price_change_30d=price_change_to_avg,  # Using average as approximation
+                price_change_7d=price_change_7d,
+                price_change_30d=price_change_30d,
                 source_exchange=Exchange.BYBIT
             )
 
@@ -429,56 +464,11 @@ class SpotUSDTProcessor:
             log_with_context(
                 logger, 'error',
                 "Error in Bybit spot processing",
-                error=str(e),
-                exc_info=True
-            )
-            return SpotUSDTResult(error=f"Bybit spot processing error: {str(e)}")
-            usdt[-30:] if len(volumes_usdt) > 30 else volumes_usdt
-            prices = prices[-30:] if len(prices) > 30 else prices
-
-            if not volumes_usdt or not prices:
-                return SpotUSDTResult(error="No valid spot data from Bybit")
-
-            # Calculate averages
-            avg_volume = sum(volumes_usdt) / len(volumes_usdt)
-            avg_price = sum(prices) / len(prices)
-
-            # Get current data
-            current_volume = volumes_usdt[-1] if volumes_usdt else 0
-            current_price = prices[-1] if prices else 0
-
-            # Calculate percentage changes
-            volume_change_pct = calculate_percentage_change(current_volume, avg_volume)
-            price_change_pct = calculate_percentage_change(current_price, avg_price)
-
-            log_with_context(
-                logger, 'info',
-                "Bybit spot processing successful",
                 symbol=trading_symbol,
-                avg_volume=avg_volume,
-                current_volume=current_volume,
-                avg_price=avg_price,
-                current_price=current_price
-            )
-
-            return SpotUSDTResult(
-                avg_volume_usdt=avg_volume,
-                current_volume_usdt=current_volume,
-                volume_change_percentage=volume_change_pct,
-                avg_price_usdt=avg_price,
-                current_price_usdt=current_price,
-                price_change_percentage=price_change_pct,
-                source_exchange=Exchange.BYBIT
-            )
-
-        except Exception as e:
-            log_with_context(
-                logger, 'error',
-                "Error in Bybit spot processing",
                 error=str(e),
                 exc_info=True
             )
-            return SpotUSDTResult(error=f"Bybit spot processing error: {str(e)}")
+            return SpotUSDTResult(error=f"Bybit spot processing error for {trading_symbol}: {str(e)}")
 
     def _process_coinmarketcap(self, symbol: str) -> SpotUSDTResult:
         """Process market data from CoinMarketCap."""
