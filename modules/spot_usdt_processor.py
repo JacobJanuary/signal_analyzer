@@ -29,14 +29,23 @@ class Exchange(Enum):
 @dataclass
 class SpotUSDTResult:
     """Spot USDT market calculation result."""
+    # Volume data
     avg_volume_usdt: Optional[float] = None
     current_volume_usdt: Optional[float] = None
     yesterday_volume_usdt: Optional[float] = None
-    today_yesterday_volume_change_pct: Optional[float] = None
-    volume_change_percentage: Optional[float] = None
+    volume_change_current_to_yesterday: Optional[float] = None
+    volume_change_current_to_average: Optional[float] = None
+
+    # Price data
     avg_price_usdt: Optional[float] = None
     current_price_usdt: Optional[float] = None
-    price_change_percentage: Optional[float] = None
+    yesterday_price_usdt: Optional[float] = None
+    price_change_1h: Optional[float] = None
+    price_change_24h: Optional[float] = None
+    price_change_7d: Optional[float] = None
+    price_change_30d: Optional[float] = None
+
+    # Source
     source_exchange: Optional[Exchange] = None
     error: Optional[str] = None
 
@@ -145,12 +154,16 @@ class SpotUSDTProcessor:
             volumes_usdt = []
             prices = []
 
-            for kline in klines:
+            for i, kline in enumerate(klines):
                 try:
                     # Kline structure: [open_time, open, high, low, close, volume, close_time, quote_volume, ...]
                     if len(kline) >= 8:
                         quote_volume = safe_float_conversion(kline[7])  # Volume in USDT
                         close_price = safe_float_conversion(kline[4])   # Close price
+
+                        # Skip today's incomplete data if it's the last kline
+                        if i == len(klines) - 1 and len(klines) > 30:
+                            continue
 
                         if quote_volume > 0:
                             volumes_usdt.append(quote_volume)
@@ -173,23 +186,27 @@ class SpotUSDTProcessor:
             avg_volume = sum(avg_data_volumes) / len(avg_data_volumes)
             avg_price = sum(avg_data_prices) / len(avg_data_prices)
 
-            # Get current data (last kline - today's incomplete data)
-            # Note: for 24h volume, we might need to get ticker data instead
+            # Get current data from 24h ticker
             current_ticker = self._get_binance_24h_ticker(trading_symbol)
             if current_ticker:
                 current_volume = safe_float_conversion(current_ticker.get('quoteVolume', 0))
                 current_price = safe_float_conversion(current_ticker.get('lastPrice', prices[-1]))
+                price_change_24h = safe_float_conversion(current_ticker.get('priceChangePercent', 0))
             else:
                 current_volume = volumes_usdt[-1] if volumes_usdt else 0
                 current_price = prices[-1] if prices else 0
+                price_change_24h = None
 
-            # Get yesterday's volume
+            # Get yesterday's data
             yesterday_volume = volumes_usdt[-2] if len(volumes_usdt) >= 2 else avg_volume
+            yesterday_price = prices[-2] if len(prices) >= 2 else avg_price
 
-            # Calculate percentage changes
-            volume_change_pct = calculate_percentage_change(current_volume, avg_volume)
-            price_change_pct = calculate_percentage_change(current_price, avg_price)
-            today_yesterday_change = calculate_percentage_change(current_volume, yesterday_volume)
+            # Calculate volume percentage changes
+            volume_change_to_avg = calculate_percentage_change(current_volume, avg_volume)
+            volume_change_to_yesterday = calculate_percentage_change(current_volume, yesterday_volume)
+
+            # Get price changes for different periods
+            price_changes = self._calculate_price_changes(trading_symbol, current_price)
 
             log_with_context(
                 logger, 'info',
@@ -206,11 +223,15 @@ class SpotUSDTProcessor:
                 avg_volume_usdt=avg_volume,
                 current_volume_usdt=current_volume,
                 yesterday_volume_usdt=yesterday_volume,
-                today_yesterday_volume_change_pct=today_yesterday_change,
-                volume_change_percentage=volume_change_pct,
+                volume_change_current_to_yesterday=volume_change_to_yesterday,
+                volume_change_current_to_average=volume_change_to_avg,
                 avg_price_usdt=avg_price,
                 current_price_usdt=current_price,
-                price_change_percentage=price_change_pct,
+                yesterday_price_usdt=yesterday_price,
+                price_change_1h=price_changes.get('1h'),
+                price_change_24h=price_change_24h if price_change_24h is not None else price_changes.get('24h'),
+                price_change_7d=price_changes.get('7d'),
+                price_change_30d=price_changes.get('30d'),
                 source_exchange=Exchange.BINANCE
             )
 
@@ -223,6 +244,56 @@ class SpotUSDTProcessor:
                 exc_info=True
             )
             return SpotUSDTResult(error=f"Binance spot processing error for {trading_symbol}: {str(e)}")
+
+    def _calculate_price_changes(self, symbol: str, current_price: float) -> Dict[str, Optional[float]]:
+        """Calculate price changes for different periods."""
+        changes = {'1h': None, '24h': None, '7d': None, '30d': None}
+
+        try:
+            utc_now = datetime.now(timezone.utc)
+
+            # Get 1h change
+            klines_1h = self.binance_client.get_spot_klines(
+                symbol, "1h",
+                start_time=get_timestamp_ms(utc_now - timedelta(hours=1)),
+                limit=1
+            )
+            if klines_1h and len(klines_1h[0]) > 1:
+                price_1h_ago = safe_float_conversion(klines_1h[0][1])  # Open price
+                if price_1h_ago > 0:
+                    changes['1h'] = calculate_percentage_change(current_price, price_1h_ago)
+
+            # Get 7d change
+            klines_7d = self.binance_client.get_spot_klines(
+                symbol, "1d",
+                start_time=get_timestamp_ms(utc_now - timedelta(days=7)),
+                limit=1
+            )
+            if klines_7d and len(klines_7d[0]) > 1:
+                price_7d_ago = safe_float_conversion(klines_7d[0][1])
+                if price_7d_ago > 0:
+                    changes['7d'] = calculate_percentage_change(current_price, price_7d_ago)
+
+            # Get 30d change
+            klines_30d = self.binance_client.get_spot_klines(
+                symbol, "1d",
+                start_time=get_timestamp_ms(utc_now - timedelta(days=30)),
+                limit=1
+            )
+            if klines_30d and len(klines_30d[0]) > 1:
+                price_30d_ago = safe_float_conversion(klines_30d[0][1])
+                if price_30d_ago > 0:
+                    changes['30d'] = calculate_percentage_change(current_price, price_30d_ago)
+
+        except Exception as e:
+            log_with_context(
+                logger, 'warning',
+                "Error calculating price changes",
+                symbol=symbol,
+                error=str(e)
+            )
+
+        return changes
 
     def _get_binance_24h_ticker(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get 24h ticker data from Binance."""
@@ -312,13 +383,20 @@ class SpotUSDTProcessor:
             current_volume = volumes_usdt[-1] if volumes_usdt else 0
             current_price = prices[-1] if prices else 0
 
-            # Get yesterday's volume
+            # Get yesterday's data
             yesterday_volume = volumes_usdt[-2] if len(volumes_usdt) >= 2 else avg_volume
+            yesterday_price = prices[-2] if len(prices) >= 2 else avg_price
 
-            # Calculate percentage changes
-            volume_change_pct = calculate_percentage_change(current_volume, avg_volume)
-            price_change_pct = calculate_percentage_change(current_price, avg_price)
-            today_yesterday_change = calculate_percentage_change(current_volume, yesterday_volume)
+            # Calculate volume percentage changes
+            volume_change_to_avg = calculate_percentage_change(current_volume, avg_volume)
+            volume_change_to_yesterday = calculate_percentage_change(current_volume, yesterday_volume)
+
+            # Calculate price percentage changes
+            price_change_to_avg = calculate_percentage_change(current_price, avg_price)
+
+            # For Bybit, we need to get price changes separately
+            # 24h change can be calculated from yesterday's price
+            price_change_24h = calculate_percentage_change(current_price, yesterday_price)
 
             log_with_context(
                 logger, 'info',
@@ -335,11 +413,15 @@ class SpotUSDTProcessor:
                 avg_volume_usdt=avg_volume,
                 current_volume_usdt=current_volume,
                 yesterday_volume_usdt=yesterday_volume,
-                today_yesterday_volume_change_pct=today_yesterday_change,
-                volume_change_percentage=volume_change_pct,
+                volume_change_current_to_yesterday=volume_change_to_yesterday,
+                volume_change_current_to_average=volume_change_to_avg,
                 avg_price_usdt=avg_price,
                 current_price_usdt=current_price,
-                price_change_percentage=price_change_pct,
+                yesterday_price_usdt=yesterday_price,
+                price_change_1h=None,  # Would need hourly data
+                price_change_24h=price_change_24h,
+                price_change_7d=None,  # Would need to calculate
+                price_change_30d=price_change_to_avg,  # Using average as approximation
                 source_exchange=Exchange.BYBIT
             )
 
@@ -423,10 +505,15 @@ class SpotUSDTProcessor:
             avg_price = market_data['avg_price_usd']
             current_price = market_data['current_price_usd']
 
-            # Calculate percentage changes
-            volume_change_pct = calculate_percentage_change(current_volume, avg_volume)
-            price_change_pct = calculate_percentage_change(current_price, avg_price)
-            today_yesterday_change = calculate_percentage_change(current_volume, yesterday_volume)
+            # For CMC, yesterday's price would be from historical data
+            yesterday_price = avg_price  # Approximation
+
+            # Calculate volume percentage changes
+            volume_change_to_avg = calculate_percentage_change(current_volume, avg_volume)
+            volume_change_to_yesterday = calculate_percentage_change(current_volume, yesterday_volume)
+
+            # Calculate price percentage changes
+            price_change_to_avg = calculate_percentage_change(current_price, avg_price)
 
             log_with_context(
                 logger, 'info',
@@ -440,15 +527,31 @@ class SpotUSDTProcessor:
                 data_points=market_data['data_points']
             )
 
+            # Get latest quote for additional price changes
+            latest_quote = self.cmc_client.get_latest_quote(symbol)
+            price_change_1h = None
+            price_change_24h = None
+            price_change_7d = None
+
+            if latest_quote and 'quote' in latest_quote and 'USD' in latest_quote['quote']:
+                usd_quote = latest_quote['quote']['USD']
+                price_change_1h = safe_float_conversion(usd_quote.get('percent_change_1h'))
+                price_change_24h = safe_float_conversion(usd_quote.get('percent_change_24h'))
+                price_change_7d = safe_float_conversion(usd_quote.get('percent_change_7d'))
+
             return SpotUSDTResult(
                 avg_volume_usdt=avg_volume,
                 current_volume_usdt=current_volume,
                 yesterday_volume_usdt=yesterday_volume,
-                today_yesterday_volume_change_pct=today_yesterday_change,
-                volume_change_percentage=volume_change_pct,
+                volume_change_current_to_yesterday=volume_change_to_yesterday,
+                volume_change_current_to_average=volume_change_to_avg,
                 avg_price_usdt=avg_price,
                 current_price_usdt=current_price,
-                price_change_percentage=price_change_pct,
+                yesterday_price_usdt=yesterday_price,
+                price_change_1h=price_change_1h,
+                price_change_24h=price_change_24h,
+                price_change_7d=price_change_7d,
+                price_change_30d=price_change_to_avg,
                 source_exchange=Exchange.COINMARKETCAP
             )
 

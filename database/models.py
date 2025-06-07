@@ -33,45 +33,53 @@ class EnrichedSignalData:
     created_at: datetime
 
     # OI USDT fields
-    oi_average_usdt: Optional[float] = None
-    oi_now_usdt: Optional[float] = None
-    oi_change_pct_usdt: Optional[float] = None
+    oi_usdt_average: Optional[float] = None
+    oi_usdt_current: Optional[float] = None
+    oi_usdt_yesterday: Optional[float] = None
+    oi_usdt_change_current_to_yesterday: Optional[float] = None
+    oi_usdt_change_current_to_average: Optional[float] = None
     oi_source_usdt: Optional[str] = None
 
-    # Spot USDT fields
-    spot_avg_volume_usdt: Optional[float] = None
-    spot_current_volume_usdt: Optional[float] = None
-    spot_yesterday_volume_usdt: Optional[float] = None
-    spot_today_yesterday_volume_change_pct: Optional[float] = None
-    spot_volume_change_pct_usdt: Optional[float] = None
-    spot_avg_price_usdt: Optional[float] = None
-    spot_current_price_usdt: Optional[float] = None
-    spot_price_change_pct_usdt: Optional[float] = None
-    spot_source_usdt: Optional[str] = None
+    # Spot USDT volume fields
+    spot_volume_usdt_average: Optional[float] = None
+    spot_volume_usdt_current: Optional[float] = None
+    spot_volume_usdt_yesterday: Optional[float] = None
+    spot_volume_usdt_change_current_to_yesterday: Optional[float] = None
+    spot_volume_usdt_change_current_to_average: Optional[float] = None
+    spot_volume_source_usdt: Optional[str] = None
 
-    # Spot BTC fields
-    spot_avg_volume_btc: Optional[float] = None
-    spot_current_volume_btc: Optional[float] = None
-    spot_volume_change_pct_btc: Optional[float] = None
-    spot_avg_price_btc: Optional[float] = None
-    spot_current_price_btc: Optional[float] = None
-    spot_price_change_pct_btc: Optional[float] = None
-    spot_source_btc: Optional[str] = None
+    # Spot BTC volume fields
+    spot_volume_btc_average: Optional[float] = None
+    spot_volume_btc_current: Optional[float] = None
+    spot_volume_btc_yesterday: Optional[float] = None
+    spot_volume_btc_change_current_to_yesterday: Optional[float] = None
+    spot_volume_btc_change_current_to_average: Optional[float] = None
+    spot_volume_source_btc: Optional[str] = None
 
-    # Price statistics fields
-    current_price_usdt: Optional[float] = None
-    min_price_1h: Optional[float] = None
-    max_price_1h: Optional[float] = None
-    min_price_24h: Optional[float] = None
-    max_price_24h: Optional[float] = None
-    min_price_7d: Optional[float] = None
-    max_price_7d: Optional[float] = None
-    min_price_30d: Optional[float] = None
-    max_price_30d: Optional[float] = None
-    price_change_pct_1d: Optional[float] = None
-    price_change_pct_7d: Optional[float] = None
-    price_change_pct_30d: Optional[float] = None
-    price_stat_source: Optional[str] = None
+    # Spot USDT price fields
+    spot_price_usdt_average: Optional[float] = None
+    spot_price_usdt_current: Optional[float] = None
+    spot_price_usdt_yesterday: Optional[float] = None
+    spot_price_usdt_change_1h: Optional[float] = None
+    spot_price_usdt_change_24h: Optional[float] = None
+    spot_price_usdt_change_7d: Optional[float] = None
+    spot_price_usdt_change_30d: Optional[float] = None
+    spot_price_source_usdt: Optional[str] = None
+
+    # CoinMarketCap price statistics
+    cmc_price_min_1h: Optional[float] = None
+    cmc_price_max_1h: Optional[float] = None
+    cmc_price_min_24h: Optional[float] = None
+    cmc_price_max_24h: Optional[float] = None
+    cmc_price_min_7d: Optional[float] = None
+    cmc_price_max_7d: Optional[float] = None
+    cmc_price_min_30d: Optional[float] = None
+    cmc_price_max_30d: Optional[float] = None
+
+    # CoinMarketCap percent changes
+    cmc_percent_change_1d: Optional[float] = None
+    cmc_percent_change_7d: Optional[float] = None
+    cmc_percent_change_30d: Optional[float] = None
 
 
 class SignalRepository:
@@ -148,47 +156,57 @@ class SignalRepository:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             
             -- OI, USDT
-            oi_average_usdt DECIMAL(18,2),
-            oi_now_usdt DECIMAL(18,2),
-            oi_change_pct_usdt DECIMAL(10,2),
+            oi_usdt_average DECIMAL(18,2),
+            oi_usdt_current DECIMAL(18,2),
+            oi_usdt_yesterday DECIMAL(18,2),
+            oi_usdt_change_current_to_yesterday DECIMAL(10,2),
+            oi_usdt_change_current_to_average DECIMAL(10,2),
             oi_source_usdt ENUM('binance', 'bybit'),
             
-            -- Spot USDT
-            spot_avg_volume_usdt DECIMAL(18,2),
-            spot_current_volume_usdt DECIMAL(18,2),
-            spot_yesterday_volume_usdt DECIMAL(18,2),
-            spot_today_yesterday_volume_change_pct DECIMAL(10,2),
-            spot_volume_change_pct_usdt DECIMAL(10,2),
-            spot_avg_price_usdt DECIMAL(18,8),
-            spot_current_price_usdt DECIMAL(18,8),
-            spot_price_change_pct_usdt DECIMAL(10,2),
-            spot_source_usdt ENUM('binance', 'bybit', 'coinmarketcap'),
+            -- Spot USDT volume
+            spot_volume_usdt_average DECIMAL(18,2),
+            spot_volume_usdt_current DECIMAL(18,2),
+            spot_volume_usdt_yesterday DECIMAL(18,2),
+            spot_volume_usdt_change_current_to_yesterday DECIMAL(10,2),
+            spot_volume_usdt_change_current_to_average DECIMAL(10,2),
+            spot_volume_source_usdt ENUM('binance', 'bybit', 'coinmarketcap'),
             
-            -- Spot BTC
-            spot_avg_volume_btc DECIMAL(18,8),
-            spot_current_volume_btc DECIMAL(18,8),
-            spot_volume_change_pct_btc DECIMAL(10,2),
-            spot_avg_price_btc DECIMAL(18,8),
-            spot_current_price_btc DECIMAL(18,8),
-            spot_price_change_pct_btc DECIMAL(10,2),
-            spot_source_btc ENUM('binance', 'bybit', 'coinmarketcap'),
+            -- Spot BTC volume
+            spot_volume_btc_average DECIMAL(18,8),
+            spot_volume_btc_current DECIMAL(18,8),
+            spot_volume_btc_yesterday DECIMAL(18,8),
+            spot_volume_btc_change_current_to_yesterday DECIMAL(10,2),
+            spot_volume_btc_change_current_to_average DECIMAL(10,2),
+            spot_volume_source_btc ENUM('binance', 'bybit', 'coinmarketcap'),
             
-            -- Price statistics
-            current_price_usdt DECIMAL(18,8),
-            min_price_1h DECIMAL(18,8),
-            max_price_1h DECIMAL(18,8),
-            min_price_24h DECIMAL(18,8),
-            max_price_24h DECIMAL(18,8),
-            min_price_7d DECIMAL(18,8),
-            max_price_7d DECIMAL(18,8),
-            min_price_30d DECIMAL(18,8),
-            max_price_30d DECIMAL(18,8),
-            price_change_pct_1d DECIMAL(10,2),
-            price_change_pct_7d DECIMAL(10,2),
-            price_change_pct_30d DECIMAL(10,2),
-            price_stat_source ENUM('binance', 'bybit', 'coinmarketcap'),
+            -- Spot USDT price
+            spot_price_usdt_average DECIMAL(18,8),
+            spot_price_usdt_current DECIMAL(18,8),
+            spot_price_usdt_yesterday DECIMAL(18,8),
+            spot_price_usdt_change_1h DECIMAL(10,2),
+            spot_price_usdt_change_24h DECIMAL(10,2),
+            spot_price_usdt_change_7d DECIMAL(10,2),
+            spot_price_usdt_change_30d DECIMAL(10,2),
+            spot_price_source_usdt ENUM('binance', 'bybit', 'coinmarketcap'),
+            
+            -- Coinmarketcap: min/max за периоды
+            cmc_price_min_1h DECIMAL(18,8),
+            cmc_price_max_1h DECIMAL(18,8),
+            cmc_price_min_24h DECIMAL(18,8),
+            cmc_price_max_24h DECIMAL(18,8),
+            cmc_price_min_7d DECIMAL(18,8),
+            cmc_price_max_7d DECIMAL(18,8),
+            cmc_price_min_30d DECIMAL(18,8),
+            cmc_price_max_30d DECIMAL(18,8),
+            
+            -- Coinmarketcap: изменения цен
+            cmc_percent_change_1d DECIMAL(10,2),
+            cmc_percent_change_7d DECIMAL(10,2),
+            cmc_percent_change_30d DECIMAL(10,2),
             
             INDEX idx_signal_id (signal_id),
+            INDEX idx_symbol (symbol),
+            INDEX idx_created_at (created_at),
             FOREIGN KEY (signal_id) REFERENCES signals_10min(id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """

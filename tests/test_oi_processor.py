@@ -58,7 +58,9 @@ class TestOIProcessor:
             assert result.source_exchange == Exchange.BINANCE
             assert result.average_oi_usdt == 1100000.0  # (1M + 1.1M + 1.2M) / 3
             assert result.current_oi_usdt == 1275000.0  # 50000 * 25.5
-            assert result.change_percentage == pytest.approx(15.91, rel=0.01)
+            assert result.yesterday_oi_usdt == 1200000.0  # Last historical value
+            assert result.change_current_to_average == pytest.approx(15.91, rel=0.01)
+            assert result.change_current_to_yesterday == pytest.approx(6.25, rel=0.01)
 
     def test_process_symbol_binance_no_data(self, processor):
         """Test Binance OI processing with no data."""
@@ -104,7 +106,9 @@ class TestOIProcessor:
             assert result.source_exchange == Exchange.BYBIT
             assert result.average_oi_usdt == 1050000.0  # (1M + 1.1M) / 2
             assert result.current_oi_usdt == 1200000.0
-            assert result.change_percentage == pytest.approx(14.29, rel=0.01)
+            assert result.yesterday_oi_usdt == 1100000.0  # Last value
+            assert result.change_current_to_average == pytest.approx(14.29, rel=0.01)
+            assert result.change_current_to_yesterday == pytest.approx(9.09, rel=0.01)
 
     def test_calculate_percentage_change_zero_average(self, processor):
         """Test percentage calculation with zero average."""

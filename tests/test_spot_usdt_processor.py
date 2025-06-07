@@ -1,6 +1,6 @@
 """Unit tests for Spot USDT processor module."""
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 from modules.spot_usdt_processor import SpotUSDTProcessor, SpotUSDTResult, Exchange
 
 
@@ -35,9 +35,9 @@ class TestSpotUSDTProcessor:
     def test_process_symbol_binance_success(self, processor, mock_binance_klines):
         """Test successful Binance spot processing."""
         with patch.object(
-                processor.binance_client,
-                'get_spot_klines',
-                return_value=mock_binance_klines
+            processor.binance_client,
+            'get_spot_klines',
+            return_value=mock_binance_klines
         ):
             result = processor.process_symbol('BTC')
 
@@ -63,15 +63,15 @@ class TestSpotUSDTProcessor:
     def test_process_symbol_binance_no_data(self, processor):
         """Test Binance spot processing with no data."""
         with patch.object(
-                processor.binance_client,
-                'get_spot_klines',
-                return_value=None
+            processor.binance_client,
+            'get_spot_klines',
+            return_value=None
         ):
             # Mock Bybit to also fail
             with patch.object(
-                    processor.bybit_client,
-                    'get_spot_klines',
-                    return_value=None
+                processor.bybit_client,
+                'get_spot_klines',
+                return_value=None
             ):
                 result = processor.process_symbol('BTC')
 
@@ -81,9 +81,9 @@ class TestSpotUSDTProcessor:
     def test_process_symbol_fallback_to_bybit(self, processor, mock_bybit_klines):
         """Test fallback to Bybit when Binance fails."""
         with patch.object(
-                processor.binance_client,
-                'get_spot_klines',
-                return_value=None
+            processor.binance_client,
+            'get_spot_klines',
+            return_value=None
         ), patch.object(
             processor.bybit_client,
             'get_spot_klines',
@@ -97,13 +97,15 @@ class TestSpotUSDTProcessor:
             assert result.current_volume_usdt > 0
             assert result.avg_price_usdt > 0
             assert result.current_price_usdt > 0
+            assert result.yesterday_volume_usdt is not None
+            assert result.yesterday_price_usdt is not None
 
     def test_process_symbol_empty_klines(self, processor):
         """Test processing with empty klines data."""
         with patch.object(
-                processor.binance_client,
-                'get_spot_klines',
-                return_value=[]
+            processor.binance_client,
+            'get_spot_klines',
+            return_value=[]
         ):
             result = processor._process_binance_spot('BTCUSDT')
 
@@ -119,9 +121,9 @@ class TestSpotUSDTProcessor:
         ]
 
         with patch.object(
-                processor.binance_client,
-                'get_spot_klines',
-                return_value=invalid_klines
+            processor.binance_client,
+            'get_spot_klines',
+            return_value=invalid_klines
         ):
             result = processor._process_binance_spot('BTCUSDT')
 
@@ -135,9 +137,9 @@ class TestSpotUSDTProcessor:
         ]
 
         with patch.object(
-                processor.binance_client,
-                'get_spot_klines',
-                return_value=mock_klines
+            processor.binance_client,
+            'get_spot_klines',
+            return_value=mock_klines
         ):
             result = processor._process_binance_spot('TESTUSDT')
 

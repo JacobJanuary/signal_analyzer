@@ -117,9 +117,11 @@ class SignalEnrichmentProcessor:
         try:
             oi_result = self.oi_processor.process_symbol(signal.symbol)
             if not oi_result.error:
-                enriched.oi_average_usdt = oi_result.average_oi_usdt
-                enriched.oi_now_usdt = oi_result.current_oi_usdt
-                enriched.oi_change_pct_usdt = oi_result.change_percentage
+                enriched.oi_usdt_average = oi_result.average_oi_usdt
+                enriched.oi_usdt_current = oi_result.current_oi_usdt
+                enriched.oi_usdt_yesterday = oi_result.yesterday_oi_usdt
+                enriched.oi_usdt_change_current_to_yesterday = oi_result.change_current_to_yesterday
+                enriched.oi_usdt_change_current_to_average = oi_result.change_current_to_average
                 enriched.oi_source_usdt = oi_result.source_exchange.value if oi_result.source_exchange else None
 
                 log_with_context(
@@ -128,8 +130,9 @@ class SignalEnrichmentProcessor:
                     signal_id=signal.id,
                     symbol=signal.symbol,
                     source=enriched.oi_source_usdt,
-                    average_oi=enriched.oi_average_usdt,
-                    current_oi=enriched.oi_now_usdt
+                    average_oi=enriched.oi_usdt_average,
+                    current_oi=enriched.oi_usdt_current,
+                    yesterday_oi=enriched.oi_usdt_yesterday
                 )
             else:
                 log_with_context(
@@ -153,16 +156,23 @@ class SignalEnrichmentProcessor:
         try:
             spot_usdt_result = self.spot_usdt_processor.process_symbol(signal.symbol)
             if not spot_usdt_result.error:
-                enriched.spot_avg_volume_usdt = spot_usdt_result.avg_volume_usdt
-                enriched.spot_current_volume_usdt = spot_usdt_result.current_volume_usdt
-                enriched.spot_volume_change_pct_usdt = spot_usdt_result.volume_change_percentage
-                enriched.spot_avg_price_usdt = spot_usdt_result.avg_price_usdt
-                enriched.spot_current_price_usdt = spot_usdt_result.current_price_usdt
-                enriched.spot_price_change_pct_usdt = spot_usdt_result.price_change_percentage
-                enriched.spot_source_usdt = spot_usdt_result.source_exchange.value if spot_usdt_result.source_exchange else None
+                # Volume data
+                enriched.spot_volume_usdt_average = spot_usdt_result.avg_volume_usdt
+                enriched.spot_volume_usdt_current = spot_usdt_result.current_volume_usdt
+                enriched.spot_volume_usdt_yesterday = spot_usdt_result.yesterday_volume_usdt
+                enriched.spot_volume_usdt_change_current_to_yesterday = spot_usdt_result.volume_change_current_to_yesterday
+                enriched.spot_volume_usdt_change_current_to_average = spot_usdt_result.volume_change_current_to_average
+                enriched.spot_volume_source_usdt = spot_usdt_result.source_exchange.value if spot_usdt_result.source_exchange else None
 
-                # Also save current price for price statistics
-                enriched.current_price_usdt = spot_usdt_result.current_price_usdt
+                # Price data
+                enriched.spot_price_usdt_average = spot_usdt_result.avg_price_usdt
+                enriched.spot_price_usdt_current = spot_usdt_result.current_price_usdt
+                enriched.spot_price_usdt_yesterday = spot_usdt_result.yesterday_price_usdt
+                enriched.spot_price_usdt_change_1h = spot_usdt_result.price_change_1h
+                enriched.spot_price_usdt_change_24h = spot_usdt_result.price_change_24h
+                enriched.spot_price_usdt_change_7d = spot_usdt_result.price_change_7d
+                enriched.spot_price_usdt_change_30d = spot_usdt_result.price_change_30d
+                enriched.spot_price_source_usdt = spot_usdt_result.source_exchange.value if spot_usdt_result.source_exchange else None
 
                 log_with_context(
                     logger, 'info',

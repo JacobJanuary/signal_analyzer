@@ -1,6 +1,6 @@
 """CoinMarketCap API client module."""
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from .base import BaseAPIClient
 from config.settings import settings
 from utils.logger import setup_logger, log_with_context
@@ -43,7 +43,20 @@ class CoinMarketCapClient(BaseAPIClient):
         try:
             response = self._make_request('/v1/cryptocurrency/map', params)
             if response and 'data' in response and response['data']:
+                log_with_context(
+                    logger, 'info',
+                    "Symbol found on CoinMarketCap",
+                    symbol=symbol,
+                    cmc_id=response['data'][0]['id'],
+                    name=response['data'][0]['name']
+                )
                 return response['data'][0]
+            else:
+                log_with_context(
+                    logger, 'warning',
+                    "Symbol not found on CoinMarketCap",
+                    symbol=symbol
+                )
             return None
         except Exception as e:
             log_with_context(
@@ -132,7 +145,7 @@ class CoinMarketCapClient(BaseAPIClient):
 
         try:
             # Get historical data for last 30 days
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=30)
 
             historical_data = self.get_historical_quotes(

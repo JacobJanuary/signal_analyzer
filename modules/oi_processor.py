@@ -29,7 +29,9 @@ class OIResult:
     """Open Interest calculation result."""
     average_oi_usdt: Optional[float] = None
     current_oi_usdt: Optional[float] = None
-    change_percentage: Optional[float] = None
+    yesterday_oi_usdt: Optional[float] = None
+    change_current_to_yesterday: Optional[float] = None
+    change_current_to_average: Optional[float] = None
     source_exchange: Optional[Exchange] = None
     error: Optional[str] = None
 
@@ -103,8 +105,9 @@ class OIProcessor:
         for record in historical_data:
             try:
                 oi_usdt = safe_float_conversion(record.get('sumOpenInterestValue'))
+                timestamp = int(record.get('timestamp', 0))
                 if oi_usdt > 0:
-                    oi_values.append(oi_usdt)
+                    oi_values.append((timestamp, oi_usdt))
             except (KeyError, ValueError) as e:
                 log_with_context(
                     logger, 'warning',
@@ -116,15 +119,24 @@ class OIProcessor:
         if not oi_values:
             return OIResult(error="No valid historical OI data from Binance")
 
-        average_oi = sum(oi_values) / len(oi_values)
+        # Sort by timestamp to ensure chronological order
+        oi_values.sort(key=lambda x: x[0])
+
+        # Extract values for calculations
+        oi_values_only = [v[1] for v in oi_values]
+        average_oi = sum(oi_values_only) / len(oi_values_only)
+
+        # Get yesterday's OI (last value in historical data)
+        yesterday_oi = oi_values_only[-1] if oi_values_only else None
 
         # Get current OI
         current_oi_usdt = self._get_binance_current_oi(trading_symbol)
         if current_oi_usdt is None:
             return OIResult(error="Failed to fetch current OI from Binance")
 
-        # Calculate percentage change
-        change_pct = calculate_percentage_change(current_oi_usdt, average_oi)
+        # Calculate percentage changes
+        change_to_avg = calculate_percentage_change(current_oi_usdt, average_oi)
+        change_to_yesterday = calculate_percentage_change(current_oi_usdt, yesterday_oi) if yesterday_oi else None
 
         log_with_context(
             logger, 'info',
@@ -132,13 +144,17 @@ class OIProcessor:
             symbol=trading_symbol,
             average_oi=average_oi,
             current_oi=current_oi_usdt,
-            change_pct=change_pct
+            yesterday_oi=yesterday_oi,
+            change_to_avg=change_to_avg,
+            change_to_yesterday=change_to_yesterday
         )
 
         return OIResult(
             average_oi_usdt=average_oi,
             current_oi_usdt=current_oi_usdt,
-            change_percentage=change_pct,
+            yesterday_oi_usdt=yesterday_oi,
+            change_current_to_yesterday=change_to_yesterday,
+            change_current_to_average=change_to_avg,
             source_exchange=Exchange.BINANCE
         )
 
@@ -181,21 +197,31 @@ class OIProcessor:
         oi_values_usdt = []
         for record in historical_data:
             oi_usdt = record.get('value_usdt', 0)
+            timestamp = record.get('timestamp', 0)
             if oi_usdt > 0:
-                oi_values_usdt.append(oi_usdt)
+                oi_values_usdt.append((timestamp, oi_usdt))
 
         if not oi_values_usdt:
             return OIResult(error="No valid historical OI data from Bybit")
 
-        average_oi = sum(oi_values_usdt) / len(oi_values_usdt)
+        # Sort by timestamp
+        oi_values_usdt.sort(key=lambda x: x[0])
+
+        # Extract values
+        oi_values_only = [v[1] for v in oi_values_usdt]
+        average_oi = sum(oi_values_only) / len(oi_values_only)
+
+        # Get yesterday's OI
+        yesterday_oi = oi_values_only[-1] if oi_values_only else None
 
         # Get current OI
         current_oi_usdt = self.bybit_client.get_current_oi_usdt(trading_symbol)
         if current_oi_usdt is None:
             return OIResult(error="Failed to fetch current OI from Bybit")
 
-        # Calculate percentage change
-        change_pct = calculate_percentage_change(current_oi_usdt, average_oi)
+        # Calculate percentage changes
+        change_to_avg = calculate_percentage_change(current_oi_usdt, average_oi)
+        change_to_yesterday = calculate_percentage_change(current_oi_usdt, yesterday_oi) if yesterday_oi else None
 
         log_with_context(
             logger, 'info',
@@ -203,12 +229,16 @@ class OIProcessor:
             symbol=trading_symbol,
             average_oi=average_oi,
             current_oi=current_oi_usdt,
-            change_pct=change_pct
+            yesterday_oi=yesterday_oi,
+            change_to_avg=change_to_avg,
+            change_to_yesterday=change_to_yesterday
         )
 
         return OIResult(
             average_oi_usdt=average_oi,
             current_oi_usdt=current_oi_usdt,
-            change_percentage=change_pct,
+            yesterday_oi_usdt=yesterday_oi,
+            change_current_to_yesterday=change_to_yesterday,
+            change_current_to_average=change_to_avg,
             source_exchange=Exchange.BYBIT
         )
