@@ -191,6 +191,7 @@ class CoinMarketCapClient(BaseAPIClient):
                 )
                 return None
 
+            historical_data.sort(key=lambda x: x.get('timestamp'))
             # Get latest quote
             latest_quote = self.get_latest_quote(symbol)
             if not latest_quote:

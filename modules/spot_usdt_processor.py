@@ -499,14 +499,15 @@ class SpotUSDTProcessor:
                 return SpotUSDTResult(error=f"No data available from CoinMarketCap for {symbol}")
 
             # Extract data
-            avg_volume = market_data['avg_volume_usd']
-            current_volume = market_data['current_volume_usd']
-            yesterday_volume = market_data.get('yesterday_volume_usd', avg_volume)
+            avg_volume = market_data['avg_volume_usdt']
+            current_volume = market_data['current_volume_usdt']
+            yesterday_volume = market_data.get('yesterday_volume_usdt', avg_volume)
             avg_price = market_data['avg_price_usd']
             current_price = market_data['current_price_usd']
 
             # For CMC, yesterday's price would be from historical data
-            yesterday_price = avg_price  # Approximation
+            yesterday_price = market_data.get('yesterday_price_usd',
+                                              avg_price)  # Улучшено: используем данные, если они есть
 
             # Calculate volume percentage changes
             volume_change_to_avg = calculate_percentage_change(current_volume, avg_volume)
