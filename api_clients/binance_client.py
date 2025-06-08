@@ -69,3 +69,23 @@ class BinanceClient(BaseAPIClient):
         self.base_url = original_base_url
 
         return result
+
+    def get_futures_klines(
+            self,
+            symbol: str,
+            interval: str,
+            start_time: Optional[int] = None,
+            end_time: Optional[int] = None,
+            limit: Optional[int] = None
+    ) -> Optional[List[List[Any]]]:
+        """Get futures market klines."""
+        params = {"symbol": symbol, "interval": interval}
+        if start_time:
+            params["startTime"] = start_time
+        if end_time:
+            params["endTime"] = end_time
+        if limit:
+            params["limit"] = limit
+
+        # Используем эндпоинт фьючерсов
+        return self._make_request("/fapi/v1/klines", params)

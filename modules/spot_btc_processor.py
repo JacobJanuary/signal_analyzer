@@ -1,5 +1,5 @@
 # Файл: modules/spot_btc_processor.py
-# --- НОВЫЙ ФАЙЛ ---
+# --- ИСПРАВЛЕННАЯ ВЕРСИЯ ---
 
 """Module: Spot BTC volume processing."""
 from typing import Dict, Any, Optional
@@ -118,11 +118,10 @@ class SpotBTCProcessor:
 
             for kline in processed_klines:
                 try:
-                    # Kline structure: [..., close, volume, ...]
-                    # Index 5 is the base asset volume ('BTC' in this case)
-                    base_volume = safe_float_conversion(kline[5])
-                    if base_volume > 0:
-                        volumes_btc.append(base_volume)
+                    # ---> ИЗМЕНЕНИЕ: Используем индекс 7 (quote_asset_volume) вместо 5 <---
+                    btc_volume = safe_float_conversion(kline[7])
+                    if btc_volume > 0:
+                        volumes_btc.append(btc_volume)
                 except (IndexError, ValueError) as e:
                     log_with_context(logger, 'warning', "Error processing Binance kline", error=str(e))
 
@@ -133,8 +132,9 @@ class SpotBTCProcessor:
 
             # Get current data from 24h ticker
             current_ticker = self._get_binance_24h_ticker(trading_symbol)
-            current_volume = safe_float_conversion(current_ticker.get('volume', 0)) if current_ticker else volumes_btc[
-                -1]
+            # ---> ИЗМЕНЕНИЕ: Используем 'quoteVolume' для получения объема в BTC <---
+            current_volume = safe_float_conversion(current_ticker.get('quoteVolume', 0)) if current_ticker else \
+            volumes_btc[-1]
 
             yesterday_volume = volumes_btc[-1] if len(volumes_btc) >= 1 else avg_volume
 
@@ -180,11 +180,10 @@ class SpotBTCProcessor:
 
             for kline in processed_klines:
                 try:
-                    # Bybit kline: [..., close, volume, turnover]
-                    # Index 5 is the base asset volume ('BTC' in this case)
-                    base_volume = safe_float_conversion(kline[5])
-                    if base_volume > 0:
-                        volumes_btc.append(base_volume)
+                    # ---> ИЗМЕНЕНИЕ: Используем индекс 6 (turnover) вместо 5 <---
+                    btc_volume = safe_float_conversion(kline[6])
+                    if btc_volume > 0:
+                        volumes_btc.append(btc_volume)
                 except (IndexError, ValueError) as e:
                     log_with_context(logger, 'warning', "Error processing Bybit kline", error=str(e))
 
@@ -192,6 +191,7 @@ class SpotBTCProcessor:
                 return SpotBTCResult(error="No valid spot BTC volume data from Bybit")
 
             avg_volume = sum(volumes_btc) / len(volumes_btc)
+            # For Bybit, daily kline represents the last 24h, so the last element is our "current" volume
             current_volume = volumes_btc[-1] if volumes_btc else 0
             yesterday_volume = volumes_btc[-1] if len(volumes_btc) >= 1 else avg_volume
 
@@ -209,7 +209,7 @@ class SpotBTCProcessor:
                 source_exchange=Exchange.BYBIT
             )
         except Exception as e:
-            log_with_context(logger, 'error', "Error in Bybit spot BTC processing", error=str(e), exc_info=True)
+            log_with_context(logger, 'error', "Error in Bybit spot processing", error=str(e), exc_info=True)
             return SpotBTCResult(error=f"Bybit spot processing error: {str(e)}")
 
     def _get_binance_24h_ticker(self, symbol: str) -> Optional[Dict[str, Any]]:

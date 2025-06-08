@@ -7,6 +7,7 @@ from database.models import signal_repository, SignalRecord, EnrichedSignalData
 from modules.oi_processor import OIProcessor
 from modules.spot_usdt_processor import SpotUSDTProcessor
 from modules.spot_btc_processor import SpotBTCProcessor
+from modules.price_stats_processor import PriceStatsProcessor
 from utils.logger import setup_logger, log_with_context
 from config.settings import settings
 
@@ -22,6 +23,7 @@ class SignalEnrichmentProcessor:
         self.oi_processor = OIProcessor()
         self.spot_usdt_processor = SpotUSDTProcessor()
         self.spot_btc_processor = SpotBTCProcessor()
+        self.price_stats_processor = PriceStatsProcessor()
         # Future: Initialize other processors here
         # self.spot_btc_processor = SpotBTCProcessor()
         # self.price_stats_processor = PriceStatsProcessor()
@@ -245,7 +247,30 @@ class SignalEnrichmentProcessor:
             )
 
         # Step 2.4: Process price statistics
-        # TODO: Implement when PriceStatsProcessor is ready
+        try:
+            stats_result = self.price_stats_processor.process_symbol(signal.symbol)
+            if not stats_result.error:
+                enriched.cmc_price_min_1h = stats_result.price_min_1h
+                enriched.cmc_price_max_1h = stats_result.price_max_1h
+                enriched.cmc_price_min_24h = stats_result.price_min_24h
+                enriched.cmc_price_max_24h = stats_result.price_max_24h
+                enriched.cmc_price_min_7d = stats_result.price_min_7d
+                enriched.cmc_price_max_7d = stats_result.price_max_7d
+                enriched.cmc_price_min_30d = stats_result.price_min_30d
+                enriched.cmc_price_max_30d = stats_result.price_max_30d
+                enriched.cmc_percent_change_1d = stats_result.percent_change_1d
+                enriched.cmc_percent_change_7d = stats_result.percent_change_7d
+                enriched.cmc_percent_change_30d = stats_result.percent_change_30d
+                # Источник можно сохранить в одно из полей, если нужно,
+                # но в схеме EnrichedSignalData отдельного поля для этого нет
+                log_with_context(logger, 'info', "Price stats processing successful", signal_id=signal.id,
+                                 symbol=signal.symbol, source=stats_result.source_exchange)
+            else:
+                log_with_context(logger, 'warning', "Price stats processing failed", signal_id=signal.id,
+                                 symbol=signal.symbol, error=stats_result.error)
+        except Exception as e:
+            log_with_context(logger, 'error', "Exception in Price stats processing", signal_id=signal.id, error=str(e),
+                             exc_info=True)
 
         return enriched
 
