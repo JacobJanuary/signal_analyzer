@@ -306,3 +306,31 @@ class CoinMarketCapClient(BaseAPIClient):
                 exc_info=True
             )
             return None
+
+    def get_latest_quotes_by_ids(self, ids: List[int]) -> Optional[Dict[str, Any]]:
+        """Get latest market data for a list of CoinMarketCap IDs."""
+        if not self.is_configured() or not ids:
+            return None
+
+        # Convert list of IDs to comma-separated string
+        ids_str = ','.join(map(str, ids))
+
+        params = {
+            'id': ids_str,
+            'convert': 'USD'
+        }
+
+        try:
+            # Using v1 endpoint which is suitable for this
+            response = self._make_request('/v1/cryptocurrency/quotes/latest', params)
+            if response and 'data' in response:
+                return response['data']
+            return None
+        except Exception as e:
+            log_with_context(
+                logger, 'error',
+                "Error getting latest quotes by ID from CMC",
+                ids=ids_str,
+                error=str(e)
+            )
+            return None
