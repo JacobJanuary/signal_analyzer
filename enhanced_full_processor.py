@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 # ML библиотеки
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import RobustScaler, LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, roc_auc_score
 import xgboost as xgb
@@ -24,6 +24,7 @@ import lightgbm as lgb
 from xgboost.callback import EarlyStopping
 from sklearn.neural_network import MLPClassifier
 import joblib
+from sklearn.impute import SimpleImputer
 
 load_dotenv()
 
@@ -46,7 +47,7 @@ class EnhancedFullSignalsProcessor:
 
         # ML компоненты
         self.models: Dict[str, Any] = {}
-        self.scaler = StandardScaler()
+        self.scaler = RobustScaler()
         self.label_encoders = {}
 
         # Расширенный список признаков
@@ -568,6 +569,10 @@ class EnhancedFullSignalsProcessor:
 
         return X, y, available_features
 
+    # Файл: enhanced_full_processor.py
+
+    # Файл: enhanced_full_processor.py
+
     def train_enhanced_models(self, X: pd.DataFrame, y: pd.Series) -> Dict:
         """Обучает модели на расширенном наборе признаков"""
         print("\n🎯 Обучение ML моделей на полном наборе данных...")
@@ -576,70 +581,51 @@ class EnhancedFullSignalsProcessor:
             X, y, test_size=0.2, random_state=42, stratify=y
         )
 
-        # Масштабирование
+        # Сохраняем названия колонок, чтобы не потерять их после преобразований
+        X_columns = X.columns.to_list()
+
+        # Шаг 1: Обработка пропущенных значений
+        imputer = SimpleImputer(strategy='median')
+        X_train = imputer.fit_transform(X_train)
+        X_test = imputer.transform(X_test)
+
+        # Шаг 2: Масштабирование данных
+        # Используем RobustScaler, который устойчив к выбросам
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
 
+        # ИСПРАВЛЕНИЕ: Возвращаем данные в DataFrame, чтобы сохранить названия признаков
+        X_train = pd.DataFrame(X_train, columns=X_columns)
+        X_test = pd.DataFrame(X_test, columns=X_columns)
+
         results = {}
 
-        # 1. Random Forest с оптимизированными параметрами
+        # 1. Random Forest
         print("\n1️⃣  Random Forest...")
         rf_model = RandomForestClassifier(
-            n_estimators=300,
-            max_depth=15,
-            min_samples_split=20,
-            min_samples_leaf=5,
-            max_features='sqrt',
-            class_weight='balanced',
-            random_state=42,
-            n_jobs=-1
+            n_estimators=300, max_depth=15, min_samples_split=20, min_samples_leaf=5,
+            max_features='sqrt', class_weight='balanced', random_state=42, n_jobs=-1
         )
         rf_model.fit(X_train, y_train)
-        results['random_forest'] = self._evaluate_model(rf_model, X_test, y_test, X.columns)
+        results['random_forest'] = self._evaluate_model(rf_model, X_test, y_test, X_columns)
 
-        # 2. XGBoost с настройкой под большой набор признаков
+        # 2. XGBoost
         print("2️⃣  XGBoost...")
         scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum() if (y_train == 1).sum() > 0 else 1
-
         xgb_model = xgb.XGBClassifier(
-            n_estimators=300,
-            max_depth=8,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.6,
-            scale_pos_weight=scale_pos_weight,
-            random_state=42,
-            eval_metric='logloss',
-            reg_alpha=0.1,
-            reg_lambda=1.0
+            n_estimators=300, max_depth=8, learning_rate=0.05, subsample=0.8,
+            colsample_bytree=0.6, scale_pos_weight=scale_pos_weight, random_state=42,
+            eval_metric='logloss', reg_alpha=0.1, reg_lambda=1.0
         )
-
-        eval_set = [(X_test, y_test)]
-
-        # --- ЭТО ВЕРНЫЙ СИНТАКСИС ДЛЯ ВАШЕЙ ВЕРСИИ XGBOOST 3.0.2 ---
-        xgb_model.fit(
-            X_train, y_train,
-            eval_set=eval_set,
-            callbacks=[EarlyStopping(rounds=50, save_best=True)],
-            verbose=False
-        )
-        # ---
-
+        xgb_model.fit(X_train, y_train)
         results['xgboost'] = self._evaluate_model(xgb_model, X_test, y_test)
 
-        # 3. LightGBM - эффективен для больших наборов признаков
+        # 3. LightGBM
         print("3️⃣  LightGBM...")
         lgb_model = lgb.LGBMClassifier(
-            n_estimators=300,
-            max_depth=8,
-            learning_rate=0.05,
-            num_leaves=31,
-            feature_fraction=0.7,
-            bagging_fraction=0.8,
-            bagging_freq=5,
-            class_weight='balanced',
-            random_state=42,
-            verbosity=-1
+            n_estimators=300, max_depth=8, learning_rate=0.05, num_leaves=31,
+            feature_fraction=0.7, bagging_fraction=0.8, bagging_freq=5, class_weight='balanced',
+            random_state=42, verbosity=-1
         )
         lgb_model.fit(
             X_train, y_train,
@@ -648,31 +634,30 @@ class EnhancedFullSignalsProcessor:
         )
         results['lightgbm'] = self._evaluate_model(lgb_model, X_test, y_test)
 
-        # 4. Neural Network с большей архитектурой
+        # 4. Neural Network
         print("4️⃣  Neural Network...")
+
+        # ИСПРАВЛЕНИЕ: Меняем параметры MLP для повышения стабильности
         nn_model = MLPClassifier(
-            hidden_layer_sizes=(256, 128, 64, 32),
+            hidden_layer_sizes=(128, 64, 32),  # Немного уменьшим сложность
             activation='relu',
-            solver='adam',
-            alpha=0.001,
-            batch_size='auto',
-            learning_rate='adaptive',
+            solver='sgd',  # Меняем solver на более стабильный 'sgd'
+            momentum=0.9,  # Стандартный параметр для 'sgd'
+            learning_rate='adaptive',  # Адаптивная скорость обучения
             learning_rate_init=0.001,
-            max_iter=1000,
+            max_iter=500,  # Уменьшим, т.к. sgd может сходиться дольше
             early_stopping=True,
-            validation_fraction=0.1,
             n_iter_no_change=20,
-            random_state=42
+            random_state=42,
+            verbose=False  # Отключаем лишний вывод в лог
         )
         nn_model.fit(X_train_scaled, y_train)
         results['neural_network'] = self._evaluate_model(nn_model, X_test_scaled, y_test)
 
         # Сохраняем модели
         self.models = {name: res['model'] for name, res in results.items()}
-
         # Выводим результаты
         self._print_enhanced_results(results)
-
         return results
 
     def _evaluate_model(self, model: Any, X_test: pd.DataFrame, y_test: pd.Series,
